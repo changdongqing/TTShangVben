@@ -17,13 +17,16 @@ import {
   Dropdown,
   Menu,
   MenuItem,
+  message,
   Modal,
   Popconfirm,
   Space,
+  Tag,
 } from 'ant-design-vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
+  userAdd,
   userExport,
   userList,
   userRemove,
@@ -38,6 +41,17 @@ import userDrawer from './user-drawer.vue';
 import userImportModal from './user-import-modal.vue';
 import userInfoModal from './user-info-modal.vue';
 import userResetPwdModal from './user-reset-pwd-modal.vue';
+
+// 跟踪待处理的更改
+const pendingChanges = ref<{
+  added: User[];
+  modified: Set<string>;
+  deleted: Set<string>;
+}>({
+  added: [],
+  modified: new Set(),
+  deleted: new Set(),
+});
 
 /**
  * 导入
@@ -122,6 +136,27 @@ const gridOptions: VxeGridProps = {
   rowConfig: {
     keyField: 'id',
   },
+  editConfig: {
+    trigger: 'dblclick',
+    mode: 'row',
+    showStatus: true,
+  },
+  editRules: {
+    userName: [{ required: true, message: '用户账号必填' }],
+    nick: [{ required: true, message: '用户昵称必填' }],
+    phone: [
+      {
+        pattern: /^1[3-9]\d{9}$/,
+        message: '请输入正确的手机号码',
+      },
+    ],
+    email: [
+      {
+        pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+        message: '请输入正确的邮箱',
+      },
+    ],
+  },
   id: 'system-user-index',
 };
 // @ts-expect-error 类型实例化过深
@@ -135,8 +170,24 @@ const [UserDrawer, userDrawerApi] = useVbenDrawer({
 });
 
 function handleAdd() {
-  userDrawerApi.setData({});
-  userDrawerApi.open();
+  // 添加新行到表格中（本地操作，不立即保存）
+  const newUser: Partial<User> = {
+    id: `temp_${Date.now()}`, // 临时ID
+    userName: '',
+    nick: '',
+    state: true,
+    sex: 'Man',
+    creationTime: new Date().toISOString(),
+  };
+  
+  tableApi.grid.insertAt(newUser, 0);
+  pendingChanges.value.added.push(newUser as User);
+  
+  // 进入编辑模式
+  setTimeout(() => {
+    tableApi.grid.setActiveRow(tableApi.grid.getRowByIndex(0));
+    tableApi.grid.setEditRow(tableApi.grid.getRowByIndex(0));
+  }, 100);
 }
 
 function handleEdit(row: User) {
@@ -151,22 +202,93 @@ async function handleDelete(row: User) {
 
 function handleMultiDelete() {
   const rows = tableApi.grid.getCheckboxRecords();
-  const ids = rows.map((row: User) => row.id);
-  Modal.confirm({
-    title: '提示',
-    okType: 'danger',
-    content: `确认删除选中的${ids.length}条记录吗？`,
-    onOk: async () => {
-      await userRemove(ids);
-      await tableApi.query();
-    },
+  
+  // 将选中的行标记为删除
+  rows.forEach((row: User) => {
+    if (!row.id.toString().startsWith('temp_')) {
+      // 不是新增的行，标记为删除
+      pendingChanges.value.deleted.add(row.id);
+    } else {
+      // 新增的行，从添加列表中移除
+      const index = pendingChanges.value.added.findIndex(u => u.id === row.id);
+      if (index !== -1) {
+        pendingChanges.value.added.splice(index, 1);
+      }
+    }
+    // 从表格中移除
+    tableApi.grid.remove(row);
   });
+  
+  message.success(`已标记${rows.length}条记录为删除，点击保存按钮后生效`);
 }
 
 function handleDownloadExcel() {
   commonDownloadExcel(userExport, '用户管理', tableApi.formApi.form.values, {
     fieldMappingTime: formOptions.fieldMappingTime,
   });
+}
+
+// 批量保存所有更改
+async function handleSave() {
+  const hasChanges = 
+    pendingChanges.value.added.length > 0 ||
+    pendingChanges.value.modified.size > 0 ||
+    pendingChanges.value.deleted.size > 0;
+    
+  if (!hasChanges) {
+    message.info('没有需要保存的更改');
+    return;
+  }
+
+  Modal.confirm({
+    title: '确认保存',
+    content: `即将保存以下更改：\n新增: ${pendingChanges.value.added.length} 条\n修改: ${pendingChanges.value.modified.size} 条\n删除: ${pendingChanges.value.deleted.size} 条`,
+    onOk: async () => {
+      try {
+        // 1. 处理删除
+        if (pendingChanges.value.deleted.size > 0) {
+          await userRemove(Array.from(pendingChanges.value.deleted));
+        }
+
+        // 2. 处理新增
+        for (const user of pendingChanges.value.added) {
+          const userData = { ...user };
+          delete userData.id; // 移除临时ID
+          await userAdd(userData);
+        }
+
+        // 3. 处理修改
+        const allRows = tableApi.grid.getTableData().fullData;
+        for (const userId of pendingChanges.value.modified) {
+          const row = allRows.find((r: User) => r.id === userId);
+          if (row && !row.id.toString().startsWith('temp_')) {
+            await userUpdate(row);
+          }
+        }
+
+        // 清空待处理更改
+        pendingChanges.value = {
+          added: [],
+          modified: new Set(),
+          deleted: new Set(),
+        };
+
+        message.success('保存成功');
+        await tableApi.query();
+      } catch (error) {
+        message.error('保存失败');
+        console.error(error);
+      }
+    },
+  });
+}
+
+// 监听行编辑完成事件
+function handleEditClosed({ row }: { row: User }) {
+  if (!row.id.toString().startsWith('temp_')) {
+    // 已存在的行，标记为修改
+    pendingChanges.value.modified.add(row.id);
+  }
 }
 
 const [UserInfoModal, userInfoModalApi] = useVbenModal({
@@ -198,7 +320,7 @@ const { hasAccessByCodes } = useAccess();
         @reload="() => tableApi.reload()"
         @select="() => tableApi.reload()"
       />
-      <BasicTable class="flex-1 overflow-hidden" table-title="用户列表">
+      <BasicTable class="flex-1 overflow-hidden" table-title="用户列表" @edit-closed="handleEditClosed">
         <template #toolbar-tools>
           <Space>
             <a-button
@@ -229,11 +351,40 @@ const { hasAccessByCodes } = useAccess();
             >
               {{ $t('pages.common.add') }}
             </a-button>
+            <a-button
+              type="primary"
+              v-access:code="['system:user:edit']"
+              @click="handleSave"
+            >
+              保存
+            </a-button>
           </Space>
         </template>
         <template #avatar="{ row }">
           <!-- 可能要判断空字符串情况 所以没有使用?? -->
           <Avatar :src="row.icon || preferences.app.defaultAvatar" />
+        </template>
+        <template #deptName="{ row }">
+          {{ row.deptName || '暂无' }}
+        </template>
+        <template #sex="{ row }">
+          {{ row.sex === 'Man' ? '男' : row.sex === 'Woman' ? '女' : '未知' }}
+        </template>
+        <template #posts="{ row }">
+          <div v-if="row.posts && row.posts.length > 0" class="flex flex-wrap gap-0.5">
+            <Tag v-for="item in row.posts" :key="item.postId" size="small">
+              {{ item.postName }}
+            </Tag>
+          </div>
+          <span v-else>暂无</span>
+        </template>
+        <template #roles="{ row }">
+          <div v-if="row.roles && row.roles.length > 0" class="flex flex-wrap gap-0.5">
+            <Tag v-for="item in row.roles" :key="item.roleId" size="small" color="blue">
+              {{ item.roleName }}
+            </Tag>
+          </div>
+          <span v-else>暂无</span>
         </template>
         <template #status="{ row }">
           <TableSwitch
@@ -247,28 +398,6 @@ const { hasAccessByCodes } = useAccess();
         </template>
         <template #action="{ row }">
           <template v-if="row.id !== '1'">
-            <Space>
-              <ghost-button
-                v-access:code="['system:user:edit']"
-                @click.stop="handleEdit(row)"
-              >
-                {{ $t('pages.common.edit') }}
-              </ghost-button>
-              <Popconfirm
-                :get-popup-container="getVxePopupContainer"
-                placement="left"
-                title="确认删除？"
-                @confirm="handleDelete(row)"
-              >
-                <ghost-button
-                  danger
-                  v-access:code="['system:user:remove']"
-                  @click.stop=""
-                >
-                  {{ $t('pages.common.delete') }}
-                </ghost-button>
-              </Popconfirm>
-            </Space>
             <Dropdown placement="bottomRight">
               <template #overlay>
                 <Menu>

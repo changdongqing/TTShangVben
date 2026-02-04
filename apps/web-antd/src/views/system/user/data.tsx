@@ -45,11 +45,13 @@ export const columns: VxeGridProps['columns'] = [
     field: 'userName',
     title: '账号',
     minWidth: 80,
+    editRender: { name: 'input' },
   },
   {
     field: 'nick',
     title: '昵称',
     minWidth: 130,
+    editRender: { name: 'input' },
   },
   {
     field: 'icon',
@@ -61,6 +63,7 @@ export const columns: VxeGridProps['columns'] = [
     field: 'deptName',
     title: '部门',
     minWidth: 120,
+    slots: { default: 'deptName' },
   },
   {
     field: 'phone',
@@ -69,12 +72,49 @@ export const columns: VxeGridProps['columns'] = [
       return cellValue || '暂无';
     },
     minWidth: 120,
+    editRender: { name: 'input' },
+  },
+  {
+    field: 'email',
+    title: '邮箱',
+    formatter({ cellValue }) {
+      return cellValue || '暂无';
+    },
+    minWidth: 150,
+    editRender: { name: 'input' },
+  },
+  {
+    field: 'sex',
+    title: '性别',
+    slots: { default: 'sex' },
+    minWidth: 80,
+  },
+  {
+    field: 'posts',
+    title: '岗位',
+    slots: { default: 'posts' },
+    minWidth: 120,
+  },
+  {
+    field: 'roles',
+    title: '角色',
+    slots: { default: 'roles' },
+    minWidth: 120,
   },
   {
     field: 'state',
     title: '状态',
     slots: { default: 'status' },
     minWidth: 100,
+  },
+  {
+    field: 'remark',
+    title: '备注',
+    formatter({ cellValue }) {
+      return cellValue || '暂无';
+    },
+    minWidth: 150,
+    editRender: { name: 'textarea' },
   },
   {
     field: 'creationTime',
