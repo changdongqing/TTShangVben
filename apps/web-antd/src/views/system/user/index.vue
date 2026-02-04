@@ -211,7 +211,8 @@ function handleMultiDelete() {
   
   // 将选中的行标记为删除
   rows.forEach((row: User) => {
-    if (!row.id.toString().startsWith(TEMP_ID_PREFIX)) {
+    const rowId = String(row.id); // Ensure id is string
+    if (!rowId.startsWith(TEMP_ID_PREFIX)) {
       // 不是新增的行，标记为删除
       pendingChanges.value.deleted.add(row.id);
     } else {
@@ -259,25 +260,61 @@ async function handleSave() {
     title: '确认保存',
     content,
     onOk: async () => {
+      const results = {
+        deleted: { success: 0, failed: 0 },
+        added: { success: 0, failed: 0 },
+        modified: { success: 0, failed: 0 },
+      };
+
       try {
         // 1. 处理删除
         if (pendingChanges.value.deleted.size > 0) {
-          await userRemove(Array.from(pendingChanges.value.deleted));
+          try {
+            await userRemove(Array.from(pendingChanges.value.deleted));
+            results.deleted.success = pendingChanges.value.deleted.size;
+          } catch (error) {
+            results.deleted.failed = pendingChanges.value.deleted.size;
+            throw error;
+          }
         }
 
         // 2. 处理新增
         for (const user of pendingChanges.value.added) {
-          const { id, ...userData } = user;
-          await userAdd(userData);
+          try {
+            const { id, ...userData } = user;
+            await userAdd(userData);
+            results.added.success++;
+          } catch (error) {
+            results.added.failed++;
+            console.error('Failed to add user:', user, error);
+          }
         }
 
         // 3. 处理修改
         const allRows = tableApi.grid.getTableData().fullData;
         for (const userId of pendingChanges.value.modified) {
-          const row = allRows.find((r: User) => r.id === userId);
-          if (row && !row.id.toString().startsWith(TEMP_ID_PREFIX)) {
-            await userUpdate(row);
+          try {
+            const row = allRows.find((r: User) => r.id === userId);
+            const rowId = row ? String(row.id) : '';
+            if (row && !rowId.startsWith(TEMP_ID_PREFIX)) {
+              await userUpdate(row);
+              results.modified.success++;
+            }
+          } catch (error) {
+            results.modified.failed++;
+            console.error('Failed to update user:', userId, error);
           }
+        }
+
+        // 检查是否有失败的操作
+        const totalFailed = results.added.failed + results.modified.failed + results.deleted.failed;
+        
+        if (totalFailed > 0) {
+          message.warning(
+            `保存完成，但有 ${totalFailed} 个操作失败。成功: 新增${results.added.success}、修改${results.modified.success}、删除${results.deleted.success}`
+          );
+        } else {
+          message.success('保存成功');
         }
 
         // 清空待处理更改
@@ -287,7 +324,6 @@ async function handleSave() {
           deleted: new Set(),
         };
 
-        message.success('保存成功');
         await tableApi.query();
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : '未知错误';
@@ -300,7 +336,8 @@ async function handleSave() {
 
 // 监听行编辑完成事件
 function handleEditClosed({ row }: { row: User }) {
-  if (!row.id.toString().startsWith(TEMP_ID_PREFIX)) {
+  const rowId = String(row.id); // Ensure id is string
+  if (!rowId.startsWith(TEMP_ID_PREFIX)) {
     // 已存在的行，标记为修改
     pendingChanges.value.modified.add(row.id);
   }
