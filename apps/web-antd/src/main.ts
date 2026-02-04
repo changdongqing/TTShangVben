@@ -1,7 +1,7 @@
 import { initPreferences } from '@vben/preferences';
 import { unmountGlobalLoading } from '@vben/utils';
 
-import { overridesPreferences } from './preferences';
+import { getOverridesPreferences } from './preferences';
 import { loadRuntimeConfig } from './utils/runtime-config';
 
 /**
@@ -17,10 +17,10 @@ async function initApplication() {
   const appVersion = import.meta.env.VITE_APP_VERSION;
   const namespace = `${import.meta.env.VITE_APP_NAMESPACE}-${appVersion}-${env}`;
 
-  // app偏好设置初始化
+  // app偏好设置初始化（在运行时配置加载后调用）
   await initPreferences({
     namespace,
-    overrides: overridesPreferences,
+    overrides: getOverridesPreferences(),
   });
 
   // 启动应用并挂载

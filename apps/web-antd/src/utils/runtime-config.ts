@@ -25,7 +25,7 @@ export async function loadRuntimeConfig(): Promise<AppRuntimeConfig> {
       throw new Error('Failed to load app config');
     }
     runtimeConfig = await response.json();
-    return runtimeConfig!;
+    return runtimeConfig;
   } catch (error) {
     console.warn('Failed to load runtime config, using default values:', error);
     // 返回默认配置
@@ -41,7 +41,8 @@ export async function loadRuntimeConfig(): Promise<AppRuntimeConfig> {
  */
 export function getRuntimeConfig(): AppRuntimeConfig {
   if (!runtimeConfig) {
-    console.warn('Runtime config not loaded yet, returning default values');
+    // 如果配置未加载，返回默认值
+    // 这种情况通常发生在模块初始化时，实际配置会在 loadRuntimeConfig 后更新
     return {
       title: 'TTShang',
     };
