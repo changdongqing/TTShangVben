@@ -1,5 +1,7 @@
 import { defineOverridesPreferences } from '@vben/preferences';
 
+import { getRuntimeConfig } from './utils/runtime-config';
+
 /**
  * @description 项目配置文件
  * 只需要覆盖项目中的一部分配置，不需要的配置不用覆盖，会自动使用默认配置
@@ -21,9 +23,10 @@ export const overridesPreferences = defineOverridesPreferences({
      */
     // defaultAvatar: '',
     /**
-     * 在这里设置应用标题
+     * 应用标题从运行时配置文件加载
+     * 可以在打包后修改 public/app-config.json 文件来更改站点名称
      */
-    name: import.meta.env.VITE_APP_TITLE,
+    name: getRuntimeConfig().title,
     /**
      * 不支持modal模式 需要改动的地方太多
      * 1. 正常重新登录后不会再触发接口请求 即触发登录超时的页面为空数据
