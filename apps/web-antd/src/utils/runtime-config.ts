@@ -60,7 +60,13 @@ export async function loadRuntimeConfig(): Promise<AppRuntimeConfig> {
 }
 
 /**
- * 获取运行时配置（同步方式，需要先调用 loadRuntimeConfig）
+ * 获取运行时配置（同步方式）
+ * 
+ * 注意：此函数必须在 loadRuntimeConfig() 完成后调用。
+ * 如果在配置加载过程中调用，将返回默认值。
+ * 
+ * 在应用初始化流程中，main.ts 确保了在调用 getOverridesPreferences() 之前
+ * 已经完成 loadRuntimeConfig()，因此正常情况下会返回已加载的配置。
  */
 export function getRuntimeConfig(): AppRuntimeConfig {
   if (!runtimeConfig) {
