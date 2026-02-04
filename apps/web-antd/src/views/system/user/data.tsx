@@ -88,6 +88,13 @@ export const columns: VxeGridProps['columns'] = [
     title: '性别',
     slots: { default: 'sex' },
     minWidth: 80,
+    editRender: { 
+      name: 'select',
+      options: [
+        { label: '男', value: 'Man' },
+        { label: '女', value: 'Woman' },
+      ],
+    },
   },
   {
     field: 'posts',
