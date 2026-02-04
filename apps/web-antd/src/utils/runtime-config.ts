@@ -20,11 +20,20 @@ export async function loadRuntimeConfig(): Promise<AppRuntimeConfig> {
   }
 
   try {
-    const response = await fetch('/app-config.json');
+    // 添加时间戳参数防止缓存
+    const timestamp = new Date().getTime();
+    const response = await fetch(`/app-config.json?t=${timestamp}`);
     if (!response.ok) {
       throw new Error('Failed to load app config');
     }
-    runtimeConfig = await response.json();
+    const config = await response.json();
+    
+    // 验证配置结构
+    if (!config || typeof config.title !== 'string') {
+      throw new Error('Invalid app config structure');
+    }
+    
+    runtimeConfig = config;
     return runtimeConfig;
   } catch (error) {
     console.warn('Failed to load runtime config, using default values:', error);
