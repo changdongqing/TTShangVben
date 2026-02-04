@@ -9,7 +9,10 @@ export interface AppRuntimeConfig {
   title: string;
 }
 
+const DEFAULT_TITLE = 'TTShang';
+
 let runtimeConfig: AppRuntimeConfig | null = null;
+let loadingPromise: Promise<AppRuntimeConfig> | null = null;
 
 /**
  * 加载运行时配置
@@ -19,30 +22,41 @@ export async function loadRuntimeConfig(): Promise<AppRuntimeConfig> {
     return runtimeConfig;
   }
 
-  try {
-    // 添加时间戳参数防止缓存
-    const timestamp = new Date().getTime();
-    const response = await fetch(`/app-config.json?t=${timestamp}`);
-    if (!response.ok) {
-      throw new Error('Failed to load app config');
-    }
-    const config = await response.json();
-    
-    // 验证配置结构
-    if (!config || typeof config.title !== 'string') {
-      throw new Error('Invalid app config structure');
-    }
-    
-    runtimeConfig = config;
-    return runtimeConfig;
-  } catch (error) {
-    console.warn('Failed to load runtime config, using default values:', error);
-    // 返回默认配置
-    runtimeConfig = {
-      title: 'TTShang',
-    };
-    return runtimeConfig;
+  // 如果正在加载，返回同一个 Promise
+  if (loadingPromise) {
+    return loadingPromise;
   }
+
+  loadingPromise = (async () => {
+    try {
+      // 添加时间戳参数防止缓存
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/app-config.json?t=${timestamp}`);
+      if (!response.ok) {
+        throw new Error('Failed to load app config');
+      }
+      const config = await response.json();
+      
+      // 验证配置结构
+      if (!config || typeof config.title !== 'string') {
+        throw new Error('Invalid app config structure');
+      }
+      
+      runtimeConfig = config;
+      return runtimeConfig;
+    } catch (error) {
+      console.warn('Failed to load runtime config, using default values:', error);
+      // 返回默认配置
+      runtimeConfig = {
+        title: DEFAULT_TITLE,
+      };
+      return runtimeConfig;
+    } finally {
+      loadingPromise = null;
+    }
+  })();
+
+  return loadingPromise;
 }
 
 /**
@@ -53,7 +67,7 @@ export function getRuntimeConfig(): AppRuntimeConfig {
     // 如果配置未加载，返回默认值
     // 这种情况通常发生在模块初始化时，实际配置会在 loadRuntimeConfig 后更新
     return {
-      title: 'TTShang',
+      title: DEFAULT_TITLE,
     };
   }
   return runtimeConfig;
